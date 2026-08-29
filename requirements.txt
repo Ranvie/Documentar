@@ -1,0 +1,3 @@
+tree-sitter==0.26.0
+tree-sitter-python==0.25.0
+tree-sitter-php==0.24.1
