@@ -1,15 +1,7 @@
 #!/usr/bin/env python3
-"""Exporta um dependencies.json (gerado pelo dependency.py) pra um grafo
-Graphviz .dot - le so' o JSON ja resolvido, nao reprocessa nada do projeto
-original nem depende de tree-sitter/parsers/resolvers. Ferramenta separada e
-opcional de proposito: dependency.py ja esta complexo o bastante sem acoplar
-visualizacao nele.
-
+"""
 Uso:
   python Tools/dependency/export_dot.py <dependencias.json> [--out grafo.dot]
-
-Renderizar depois (precisa do Graphviz instalado, `dot` no PATH):
-  dot -Tsvg grafo.dot -o grafo.svg
 """
 from __future__ import annotations
 
@@ -30,23 +22,10 @@ def _escapar(s: str) -> str:
 
 
 class DotExporter:
-    """Traduz o dependencies.json (fase de resolucao ja feita) num grafo
-    Graphviz. Cada aresta liga file["path"] a um resolved_path encontrado em
-    imports[] ou symbols[].extends/implements[] - so' resolved_path != null,
-    entao builtin/nao-resolvido nunca vira aresta (nao ha arquivo pra apontar)."""
-
     def __init__(self, data: dict):
         self._files = data.get("files", [])
 
     def build_edges(self) -> Counter:
-        """{(origem, destino, categoria): contagem} - contagem = quantas
-        referencias distintas do arquivo geraram essa mesma aresta.
-
-        extends/implements sao processados primeiro e "reservam" o par
-        (origem, destino): herdar de uma classe tambem produz um `use`/
-        type-hint pra ela, e sem essa checagem o mesmo par ganhava uma aresta
-        "extends" (seta vazada) E uma "uses" (cinza) sobrepostas - preferimos
-        mostrar so' a relacao mais especifica."""
         edges = Counter()
         heranca_pairs = set()
 
