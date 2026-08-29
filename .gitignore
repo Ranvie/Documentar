@@ -12,6 +12,9 @@ env/
 # Saídas geradas
 artifacts/
 
+# Anotações soltas de design, não é pra versionar
+findings.txt
+
 # Editor / OS
 .vscode/
 .idea/

@@ -6,7 +6,9 @@ Sistema de documentação automática de projetos: gerar e manter uma documenta�
 
 Princípio central: separar fato mecânico (dependências, estrutura) de julgamento (regras de negócio, arquitetura). O que é mecânico nunca é editado à mão; o que exige julgamento é gerado como rascunho e revisado por humano.
 
-**Estado atual:** só a parte de mapeamento de dependências existe. O resto (estrutura de pastas, packages, arquitetura, BusinessRules) ainda não foi implementado.
+**Granularidade: um projeto por vez.** Cada execução escaneia UM projeto e gera artefatos só pra ele, em `artifacts/<projeto>/`. Isso é proposital — a ideia é que vários projetos reais (ex: `cuidepet-back`, `cuidepet-front`, `cuidepet-form`) convivam lado a lado dentro de `artifacts/`, cada um com sua própria documentação mecânica, **sem** a ferramenta tentar adivinhar como eles se comunicam entre si nessa etapa. Essa conexão (o que chama a API de quem, o que consome qual biblioteca de qual outro projeto) é uma camada posterior — construída em cima do levantamento bruto de cada projeto individual, não junto com ele. Nesse momento o objetivo não é saber *como* os projetos se falam, é só saber que eles *existem*.
+
+**Estado atual:** só a parte de mapeamento de dependências existe (por projeto individual). O resto — estrutura de pastas, packages, arquitetura, BusinessRules, e a camada futura que conecta os projetos entre si — ainda não foi implementado.
 
 ## Como usar
 
@@ -51,7 +53,7 @@ Gera um `.dot` (Graphviz) ao lado do JSON. Renderizar depois com `dot -Tsvg graf
 |---|---|---|
 | PHP | ~90% | É a que mais testei até agora, contra um projeto Laravel real (~270 arquivos): classe/interface/trait/enum, `extends`/`implements`, imports (`use`, alias, agrupado), type hint, `new`/chamada estática/`instanceof`/`catch`, resolução via Composer (PSR-4 + classmap) e via índice próprio (PHP sem autoloader/namespace). Já passou por algumas rodadas de bug real encontrado e corrigido. |
 | Python | ~75% | Testado com projeto sintético (pacotes, `__init__.py`, import relativo em vários níveis) e contra o próprio código deste repositório. Cobre import absoluto e relativo, stdlib via `sys.stdlib_module_names`. Não testado ainda contra um projeto Python grande de verdade — pode ter bug em caso de layout mais exótico (`src/`, imports dinâmicos, etc). |
-| JavaScript | ~55% | O que tenho menos confiança. Testado só contra um punhado de arquivos reais (majoritariamente config, pouca lógica de aplicação) + um snippet sintético. Cobre `import`/`require`, classe/`extends`, função/método. **Não cobre TypeScript** (`.ts`/`.tsx` são reconhecidos mas sem parser ainda) nem resolução via `node_modules`/`package.json`/alias de bundler (`@/`, `~/`) — só import relativo (`./`, `../`) resolve. |
+| JavaScript | ~60% | O que tenho menos confiança. Testado contra um punhado de arquivos de config + um projeto Vue 3 real (só os `.js`/`.ts` soltos, ~50 arquivos). Cobre `import`/`require`, classe/`extends`, função/método, import relativo (`./`, `../`) e alias de path via `tsconfig.app.json`/`tsconfig.json` (`@/...` etc). **Não cobre `.vue`** (arquivo inteiro fica invisível hoje — é a maior parte de um projeto Vue típico), **nem TypeScript de verdade** (`.ts`/`.tsx` reconhecidos mas sem parser ainda) nem resolução via `node_modules`/`package.json` (pacote externo sempre fica sem resolver, de propósito). |
 
 Em todas as linguagens, o que não é possível resolver (pacote de terceiro, biblioteca nativa) fica com `resolved_path: null` — e, quando dá pra saber que é uma biblioteca/módulo nativo e não um bug (built-in do PHP, stdlib do Python), isso fica marcado explicitamente em vez de ficar ambíguo.
 
