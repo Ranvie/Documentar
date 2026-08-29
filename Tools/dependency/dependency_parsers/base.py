@@ -28,7 +28,8 @@ class Import:
     line: int
     alias: Optional[str] = None
     resolved_path: Optional[str] = None
-    builtin: bool = False
+    builtin: bool = False    # parte da linguagem/stdlib (Exception do PHP, os do Python)
+    external: bool = False   # dependencia de pacote de terceiro (npm/node_modules) - nao e' a mesma coisa que builtin
 
 
 @dataclass

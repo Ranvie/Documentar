@@ -51,6 +51,8 @@ class JavaScriptResolver(LanguageResolver):
                         spec_relativo_a_raiz = alvo + spec[len(prefixo):]
                         imp["resolved_path"] = self._resolve_from(root, "", spec_relativo_a_raiz)
                         break
+                else:
+                    imp["external"] = True
 
     def _resolve_from(self, root, base_dir, spec):
         base = os.path.normpath(os.path.join(root, base_dir, spec))

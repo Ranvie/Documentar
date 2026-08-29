@@ -18,3 +18,9 @@ venv
 # convencao Laravel: cache de view compilada, sessao, log e upload - nunca
 # codigo escrito a mao
 storage
+
+# build minificado (Vite/Webpack/Rollup/etc) - bundle de producao, nao codigo
+# fonte. Um .js minificado sozinho pode contribuir milhares de "simbolos"
+# falsos pro grafo (ex: 1108 de 1149 num run real, so' desse arquivo)
+dist
+build

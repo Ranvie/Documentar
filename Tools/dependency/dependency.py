@@ -33,6 +33,7 @@ EXTENSION_TO_LANGUAGE = {
     ".jsx": "javascript",
     ".ts": "typescript",
     ".tsx": "typescript",
+    ".vue": "vue",
 }
 
 PARSERS = {
@@ -138,8 +139,12 @@ def main():
         total_imports = sum(len(f["imports"]) for f in language_files)
         resolved_imports = sum(1 for f in language_files for imp in f["imports"] if imp["resolved_path"])
         builtin_imports = sum(1 for f in language_files for imp in f["imports"] if imp["builtin"])
+        external_imports = sum(1 for f in language_files for imp in f["imports"] if imp["external"])
         if total_imports:
-            resolution_counts[language] = {"total": total_imports, "resolved": resolved_imports, "builtin": builtin_imports}
+            resolution_counts[language] = {
+                "total": total_imports, "resolved": resolved_imports,
+                "builtin": builtin_imports, "external": external_imports,
+            }
 
     metadata = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
