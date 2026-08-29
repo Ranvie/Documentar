@@ -3,9 +3,6 @@
 
 Uso:
   python Tools/dependency/dependency.py [root_dir]
-
-Saida vai por default em {raiz do repo}/artifacts/{projeto}/saida-dependencias/
-(--project-name pra escolher o nome, --out-dir pra sobrescrever a pasta toda).
 """
 from __future__ import annotations
 
@@ -16,8 +13,8 @@ import sys
 from collections import defaultdict
 from datetime import datetime
 
-_HERE = os.path.dirname(os.path.abspath(__file__))       # Tools/dependency
-_TOOLS_DIR = os.path.dirname(_HERE)                       # Tools
+_HERE = os.path.dirname(os.path.abspath(__file__)) # Tools/dependency
+_TOOLS_DIR = os.path.dirname(_HERE)                # Tools
 sys.path.insert(0, _HERE)
 sys.path.insert(0, _TOOLS_DIR)
 
@@ -100,14 +97,14 @@ def main():
     ap = argparse.ArgumentParser(description="Roteador do mapeador de dependencias (extracao + resolucao).")
     ap.add_argument("root", nargs="?", default=".", help="Pasta raiz a escanear (default: .)")
     ap.add_argument("--project-name", default=None, help="Nome do projeto pra organizar os artefatos (default: nome da pasta raiz escaneada)")
-    ap.add_argument("--out-dir", default=None, help="Pasta de saida (default: {raiz do repo}/artifacts/{projeto}/saida-dependencias)")
+    ap.add_argument("--out-dir", default=None, help="Pasta de saida (default: {raiz do repo}/artifacts/{projeto}/auto-generated/out-dependencies)")
     ap.add_argument("--exclude", default="", help="Pastas extras a ignorar, separadas por virgula")
     ap.add_argument("--ignored-folders-file", default=DEFAULT_IGNORED_FOLDERS_FILE, help="Arquivo com a lista de pastas puladas (default: ignored_folders.txt na raiz do projeto)")
     args = ap.parse_args()
 
     root = os.path.abspath(args.root)
     project_name = args.project_name or os.path.basename(root.rstrip(os.sep).rstrip("/"))
-    out_dir = args.out_dir or os.path.join(ARTIFACTS_DIR, project_name, "saida-dependencias")
+    out_dir = args.out_dir or os.path.join(ARTIFACTS_DIR, project_name, "auto-generated", "out-dependencies")
     extra_dirs = {d.strip() for d in args.exclude.split(",") if d.strip()}
     excluded = load_ignored_folders(args.ignored_folders_file) | extra_dirs
 
@@ -149,7 +146,7 @@ def main():
     }
 
     os.makedirs(out_dir, exist_ok=True)
-    json_path = os.path.join(out_dir, "dependencias.json")
+    json_path = os.path.join(out_dir, "dependencies.json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump({"_metadata": metadata, "files": results}, f, ensure_ascii=False, indent=2)
 

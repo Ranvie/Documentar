@@ -3,7 +3,7 @@ from __future__ import annotations
 from tree_sitter import Language, Parser
 import tree_sitter_php as tsphp
 
-from .base import LanguageParser, FileParseResult, Symbol, Import
+from .base import LanguageParser, FileParseResult, Symbol, Import, ClassRef
 
 _LANGUAGE = Language(tsphp.language_php())
 
@@ -17,6 +17,10 @@ _DECLARATION_KIND = {
 _BODY_TYPES = ("declaration_list", "enum_declaration_list")
 
 _NAME_TYPES = ("qualified_name", "namespace_name", "name")
+
+_TYPE_ANNOTATION_TYPES = ("named_type", "optional_type", "union_type", "intersection_type")
+
+_PSEUDO_TYPE_NAMES = {"self", "static", "parent"}
 
 
 class PhpParser(LanguageParser):
@@ -40,6 +44,33 @@ class PhpParser(LanguageParser):
         name_node = next((c for c in node.children if c.type == "name"), None)
         return self._text(name_node, source) if name_node is not None else None
 
+    def _names_in_clause(self, node, clause_type, source):
+        clause = next((c for c in node.children if c.type == clause_type), None)
+        if clause is None:
+            return []
+        return [ClassRef(raw=self._text(c, source)) for c in clause.children if c.type in _NAME_TYPES]
+
+    def _type_names(self, type_node, source):
+        if type_node is None:
+            return []
+        names = []
+
+        def collect(n):
+            if n.type in _NAME_TYPES:
+                text = self._text(n, source)
+                if text.lower() not in _PSEUDO_TYPE_NAMES:
+                    names.append(text)
+                return
+            for c in n.children:
+                collect(c)
+
+        collect(type_node)
+        return names
+
+    def _declared_type_names(self, node, source):
+        type_node = next((c for c in node.children if c.type in _TYPE_ANNOTATION_TYPES), None)
+        return self._type_names(type_node, source)
+
     def _find_namespace(self, root, source):
         ns_node = next((c for c in root.children if c.type == "namespace_definition"), None)
         if ns_node is None:
@@ -54,7 +85,12 @@ class PhpParser(LanguageParser):
                 if name is None:
                     continue
                 qualified_name = f"{namespace}\\{name}" if namespace else name
-                symbols.append(Symbol(kind=_DECLARATION_KIND[child.type], name=name, qualified_name=qualified_name, line=child.start_point[0] + 1))
+                extends = self._names_in_clause(child, "base_clause", source)
+                implements = self._names_in_clause(child, "class_interface_clause", source)
+                symbols.append(Symbol(
+                    kind=_DECLARATION_KIND[child.type], name=name, qualified_name=qualified_name,
+                    line=child.start_point[0] + 1, extends=extends, implements=implements,
+                ))
                 body = next((c for c in child.children if c.type in _BODY_TYPES), None)
                 if body is not None:
                     self._walk(body, source, symbols, imports, namespace, class_name=qualified_name)
@@ -64,23 +100,74 @@ class PhpParser(LanguageParser):
                     continue
                 qualified_name = f"{namespace}\\{name}" if namespace else name
                 symbols.append(Symbol(kind="function", name=name, qualified_name=qualified_name, line=child.start_point[0] + 1))
-                # nao desce no corpo da funcao (ver docstring do modulo)
+                self._handle_signature_and_body(child, source, imports)
             elif child.type == "method_declaration":
                 name = self._direct_name(child, source)
                 if name is None:
                     continue
                 qualified_name = f"{class_name}::{name}" if class_name else name
                 symbols.append(Symbol(kind="method", name=name, qualified_name=qualified_name, line=child.start_point[0] + 1))
-                # nao desce no corpo do metodo
+                self._handle_signature_and_body(child, source, imports)
+            elif child.type == "property_declaration":
+                for type_name in self._declared_type_names(child, source):
+                    imports.append(Import(kind="type_hint", raw=type_name, line=child.start_point[0] + 1))
             elif child.type == "use_declaration":
                 self._handle_trait_use(child, source, imports)
             elif child.type == "namespace_use_declaration":
                 self._handle_namespace_use(child, source, imports)
             else:
-                # continua descendo em nos estruturais genericos (namespace com
-                # bloco, if/match/attribute_list/...) pra achar declaracoes que
-                # nao estao direto na raiz do arquivo
                 self._walk(child, source, symbols, imports, namespace, class_name)
+
+    def _handle_signature_and_body(self, node, source, imports):
+        formal_params = next((c for c in node.children if c.type == "formal_parameters"), None)
+        if formal_params is not None:
+            for param in formal_params.children:
+                if param.type in ("simple_parameter", "property_promotion_parameter", "variadic_parameter"):
+                    for type_name in self._declared_type_names(param, source):
+                        imports.append(Import(kind="type_hint", raw=type_name, line=param.start_point[0] + 1))
+
+        for type_name in self._declared_type_names(node, source):
+            imports.append(Import(kind="type_hint", raw=type_name, line=node.start_point[0] + 1))
+
+        body = next((c for c in node.children if c.type == "compound_statement"), None)
+        if body is not None:
+            self._walk_body(body, source, imports)
+
+    def _class_before_scope_operator(self, node, source):
+        idx = next((i for i, c in enumerate(node.children) if c.type == "::"), None)
+        if idx is None:
+            return None
+        target = next((c for c in node.children[:idx] if c.type in _NAME_TYPES), None)
+        return self._text(target, source) if target is not None else None
+
+    def _walk_body(self, node, source, imports):
+        line = node.start_point[0] + 1
+
+        if node.type == "object_creation_expression":
+            target = next((c for c in node.children if c.type in _NAME_TYPES), None)
+            if target is not None:
+                name = self._text(target, source)
+                if name.lower() not in _PSEUDO_TYPE_NAMES:
+                    imports.append(Import(kind="new", raw=name, line=line))
+        elif node.type == "scoped_call_expression":
+            target = self._class_before_scope_operator(node, source)
+            if target is not None:
+                imports.append(Import(kind="static_call", raw=target, line=line))
+        elif node.type == "class_constant_access_expression":
+            target = self._class_before_scope_operator(node, source)
+            if target is not None:
+                imports.append(Import(kind="class_const_access", raw=target, line=line))
+        elif node.type == "binary_expression" and any(c.type == "instanceof" for c in node.children):
+            instanceof_idx = next(i for i, c in enumerate(node.children) if c.type == "instanceof")
+            target = next((c for c in node.children[instanceof_idx + 1:] if c.type in _NAME_TYPES), None)
+            if target is not None:
+                imports.append(Import(kind="instanceof", raw=self._text(target, source), line=line))
+        elif node.type == "type_list":  # tipo(s) de excecao de um `catch (A | B $e)`
+            for type_name in self._type_names(node, source):
+                imports.append(Import(kind="catch_type", raw=type_name, line=line))
+
+        for child in node.children:
+            self._walk_body(child, source, imports)
 
     def _handle_trait_use(self, node, source, imports):
         line = node.start_point[0] + 1

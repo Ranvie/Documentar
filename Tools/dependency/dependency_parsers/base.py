@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
-from typing      import Optional
+from typing import Optional
+
+
+@dataclass
+class ClassRef:
+    raw: str
+    resolved_path: Optional[str] = None
+    builtin: bool = False
 
 
 @dataclass
@@ -10,6 +17,8 @@ class Symbol:
     name: str
     qualified_name: str
     line: int
+    extends: list = field(default_factory=list)
+    implements: list = field(default_factory=list)
 
 
 @dataclass

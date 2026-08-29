@@ -15,6 +15,11 @@ _RE_PSR4_DIR = re.compile(r"\$(vendorDir|baseDir)\s*\.\s*'((?:[^'\\]|\\.)*)'")
 
 _SYMBOL_KINDS_INDEXAVEIS = ("class", "interface", "trait", "enum", "function")
 
+_KINDS_COM_NOME_CURTO = (
+    "trait_use", "type_hint", "new", "static_call", "class_const_access",
+    "instanceof", "catch_type",
+)
+
 _BUILTIN_CLASSES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "php_builtin_classes.txt")
 
 
@@ -23,8 +28,6 @@ def _unescape_php_string(s: str) -> str:
 
 
 def _load_builtin_classes(path) -> set:
-    """Nomes (lowercase) das classes/interfaces/traits internas do PHP - nunca
-    tem arquivo pra apontar. Ver Tools/dependency_parsers/php_builtin_classes.txt."""
     names = set()
     if not os.path.isfile(path):
         return names
@@ -40,10 +43,6 @@ _BUILTIN_CLASSES_LOWER = _load_builtin_classes(_BUILTIN_CLASSES_PATH)
 
 
 def _load_composer_maps(root: str):
-    """None, None se o projeto nao tiver rodado `composer install` (sem
-    vendor/composer/*). Senao, (classmap: {nome_completo: caminho_abs},
-    psr4: [(prefixo, [dirs_abs]), ...] ordenado do prefixo mais especifico
-    pro mais generico)."""
     vendor_dir = os.path.join(root, "vendor")
     composer_dir = os.path.join(vendor_dir, "composer")
     if not os.path.isdir(composer_dir):
@@ -117,15 +116,20 @@ class PhpResolver(LanguageResolver):
 
             for imp in file["imports"]:
                 raw = imp["raw"]
-                if imp["kind"] == "trait_use":
+                if imp["kind"] in _KINDS_COM_NOME_CURTO:
                     raw = local_alias.get(raw.lstrip("\\"), raw)
-                raw = raw.lstrip("\\")
+                imp["resolved_path"], imp["builtin"] = self._finalize(raw, classmap, psr4, own_index, by_short_name, root)
 
-                if raw.lower() in _BUILTIN_CLASSES_LOWER:
-                    imp["builtin"] = True
-                    continue
+            for symbol in file["symbols"]:
+                for ref in symbol["extends"] + symbol["implements"]:
+                    raw = local_alias.get(ref["raw"].lstrip("\\"), ref["raw"])
+                    ref["resolved_path"], ref["builtin"] = self._finalize(raw, classmap, psr4, own_index, by_short_name, root)
 
-                imp["resolved_path"] = self._resolve_one(raw, classmap, psr4, own_index, by_short_name, root)
+    def _finalize(self, raw, classmap, psr4, own_index, by_short_name, root):
+        raw = raw.lstrip("\\")
+        if raw.lower() in _BUILTIN_CLASSES_LOWER:
+            return None, True
+        return self._resolve_one(raw, classmap, psr4, own_index, by_short_name, root), False
 
     def _resolve_one(self, qualified_name, classmap, psr4, own_index, by_short_name, root) -> Optional[str]:
         if classmap and qualified_name in classmap:
