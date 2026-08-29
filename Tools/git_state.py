@@ -1,12 +1,9 @@
-"""Estado do git da pasta escaneada (branch/commit/sujo), usado nos metadados
-de saida do dependency.py. Adaptado de Tools/old/mapear-dependencias.py."""
 from __future__ import annotations
 
 import subprocess
 
 
 def run_git(root, *args):
-    """None se nao for repo git, git nao estiver instalado, ou o comando falhar."""
     try:
         r = subprocess.run(
             ["git", *args], cwd=root, capture_output=True, text=True, timeout=5,

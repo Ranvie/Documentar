@@ -1,15 +1,3 @@
-"""Extrator PHP baseado em tree-sitter (v0: so' fase de extracao sintatica).
-
-Cobre: namespace do arquivo, declaracao de class/interface/trait + seus
-metodos, funcao top-level, `use` de namespace (simples, agrupado `use
-Prefix\\{A, B as C}`, `use function`/`use const`, com alias) e `use` de trait
-dentro do corpo da classe. Nao desce dentro de corpo de metodo/funcao (mesma
-decisao do python_parser.py) nem resolve nada pra caminho de arquivo real -
-isso e' a fase de resolucao semantica, ainda nao implementada.
-
-Usa a gramatica `language_php` (aceita `<?php ... ?>` misturado com HTML,
-que e' o formato normal de um arquivo .php de verdade), nao `language_php_only`.
-"""
 from __future__ import annotations
 
 from tree_sitter import Language, Parser
@@ -23,7 +11,10 @@ _DECLARATION_KIND = {
     "class_declaration": "class",
     "interface_declaration": "interface",
     "trait_declaration": "trait",
+    "enum_declaration": "enum",
 }
+
+_BODY_TYPES = ("declaration_list", "enum_declaration_list")
 
 _NAME_TYPES = ("qualified_name", "namespace_name", "name")
 
@@ -64,7 +55,7 @@ class PhpParser(LanguageParser):
                     continue
                 qualified_name = f"{namespace}\\{name}" if namespace else name
                 symbols.append(Symbol(kind=_DECLARATION_KIND[child.type], name=name, qualified_name=qualified_name, line=child.start_point[0] + 1))
-                body = next((c for c in child.children if c.type == "declaration_list"), None)
+                body = next((c for c in child.children if c.type in _BODY_TYPES), None)
                 if body is not None:
                     self._walk(body, source, symbols, imports, namespace, class_name=qualified_name)
             elif child.type == "function_definition":
@@ -121,4 +112,11 @@ class PhpParser(LanguageParser):
             else:
                 kind = "use"
 
-            imports.append(Import(kind=kind, raw=raw, line=line))
+            alias = None
+            if any(c.type == "as" for c in clause.children):
+                as_idx = next(i for i, c in enumerate(clause.children) if c.type == "as")
+                alias_node = next((c for c in clause.children[as_idx + 1:] if c.type == "name"), None)
+                if alias_node is not None:
+                    alias = self._text(alias_node, source)
+
+            imports.append(Import(kind=kind, raw=raw, line=line, alias=alias))

@@ -1,9 +1,3 @@
-"""Contrato comum que todo parser de linguagem (fase de EXTRACAO) segue.
-
-A fase de RESOLUCAO (imports_raw -> caminho real de arquivo) e' uma etapa
-separada, ainda nao implementada (PROJETO.md, decisao #1). Por isso
-Import.resolved_path fica sempre None por enquanto.
-"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
@@ -23,7 +17,9 @@ class Import:
     kind: str             # "import" | "import_from"
     raw: str
     line: int
+    alias: Optional[str] = None
     resolved_path: Optional[str] = None
+    builtin: bool = False
 
 
 @dataclass

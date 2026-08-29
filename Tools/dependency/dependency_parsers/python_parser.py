@@ -1,11 +1,3 @@
-"""Extrator Python baseado em tree-sitter (v0: so' fase de extracao sintatica).
-
-Cobre: declaracao de classe/funcao/metodo (nivel de modulo e corpo de classe)
-e `import`/`from ... import`. Nao desce dentro de corpo de funcao (imports
-"preguicosos" e classes/funcoes aninhadas em funcao ficam fora do v0) nem
-resolve imports relativos/absolutos para caminho de arquivo real - isso e'
-a fase de resolucao semantica, ainda nao implementada.
-"""
 from __future__ import annotations
 
 from tree_sitter import Language, Parser
@@ -31,6 +23,10 @@ class PythonParser(LanguageParser):
 
     def _text(self, node, source: bytes) -> str:
         return source[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
+
+    def _alias_of(self, aliased_import_node, source):
+        alias_node = next((c for c in aliased_import_node.children if c.type == "identifier"), None)
+        return self._text(alias_node, source) if alias_node is not None else None
 
     def _walk(self, node, source, symbols, imports, class_name):
         for child in node.children:
@@ -63,7 +59,7 @@ class PythonParser(LanguageParser):
             elif child.type == "aliased_import":
                 target = next((c for c in child.children if c.type == "dotted_name"), None)
                 if target is not None:
-                    imports.append(Import(kind="import", raw=self._text(target, source), line=line))
+                    imports.append(Import(kind="import", raw=self._text(target, source), line=line, alias=self._alias_of(child, source)))
 
     def _handle_import_from(self, node, source, imports):
         line = node.start_point[0] + 1
@@ -86,6 +82,6 @@ class PythonParser(LanguageParser):
             elif c.type == "aliased_import":
                 target = next((cc for cc in c.children if cc.type == "dotted_name"), None)
                 if target is not None:
-                    imports.append(Import(kind="import_from", raw=raw_with_module(self._text(target, source)), line=line))
+                    imports.append(Import(kind="import_from", raw=raw_with_module(self._text(target, source)), line=line, alias=self._alias_of(c, source)))
             elif c.type == "wildcard_import":
                 imports.append(Import(kind="import_from", raw=raw_with_module("*"), line=line))

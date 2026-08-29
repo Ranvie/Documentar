@@ -1,0 +1,20 @@
+# Pastas puladas sempre no scan de dependencias (Tools/dependency.py).
+# Uma por linha. Linha em branco ou comecando com # e' ignorada.
+#
+# Importante: casa pelo NOME EXATO da pasta, em qualquer nivel da arvore -
+# nao pelo caminho completo. Se o projeto escaneado tiver uma pasta legitima
+# com o mesmo nome (ex: um "src/Storage" custom), ela tambem seria pulada.
+# Ajuste essa lista conforme o projeto sendo documentado.
+
+.git
+node_modules
+vendor
+__pycache__
+.venv
+venv
+.mypy_cache
+.pytest_cache
+
+# convencao Laravel: cache de view compilada, sessao, log e upload - nunca
+# codigo escrito a mao
+storage

@@ -10,7 +10,7 @@ venv/
 env/
 
 # Saídas geradas
-Tools/saida-dependencias*/
+artifacts/
 
 # Editor / OS
 .vscode/
