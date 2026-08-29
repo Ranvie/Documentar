@@ -20,7 +20,10 @@ sys.path.insert(0, _TOOLS_DIR)
 
 from dependency_parsers.python_parser import PythonParser
 from dependency_parsers.php_parser import PhpParser
+from dependency_parsers.javascript_parser import JavaScriptParser
 from dependency_resolvers.php_resolver import PhpResolver
+from dependency_resolvers.javascript_resolver import JavaScriptResolver
+from dependency_resolvers.python_resolver import PythonResolver
 from git_state import get_git_info
 
 EXTENSION_TO_LANGUAGE = {
@@ -35,10 +38,13 @@ EXTENSION_TO_LANGUAGE = {
 PARSERS = {
     "python": PythonParser(),
     "php": PhpParser(),
+    "javascript": JavaScriptParser(),
 }
 
 RESOLVERS = {
     "php": PhpResolver(),
+    "javascript": JavaScriptResolver(),
+    "python": PythonResolver(),
 }
 
 PROJECT_ROOT = os.path.dirname(_TOOLS_DIR)                # raiz do repo Documentar
