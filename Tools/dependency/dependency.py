@@ -11,20 +11,13 @@ import json
 import os
 import sys
 from collections import defaultdict
-from datetime import datetime
 
 _HERE = os.path.dirname(os.path.abspath(__file__)) # Tools/dependency
 _TOOLS_DIR = os.path.dirname(_HERE)                # Tools
-sys.path.insert(0, _HERE)
 sys.path.insert(0, _TOOLS_DIR)
 
-from dependency_parsers.python_parser import PythonParser
-from dependency_parsers.php_parser import PhpParser
-from dependency_parsers.javascript_parser import JavaScriptParser
-from dependency_resolvers.php_resolver import PhpResolver
-from dependency_resolvers.javascript_resolver import JavaScriptResolver
-from dependency_resolvers.python_resolver import PythonResolver
-from git_state import get_git_info
+from metadata import Metadata
+from language_support import LANGUAGE_SUPPORT
 
 EXTENSION_TO_LANGUAGE = {
     ".py": "python",
@@ -36,19 +29,7 @@ EXTENSION_TO_LANGUAGE = {
     ".vue": "vue",
 }
 
-PARSERS = {
-    "python": PythonParser(),
-    "php": PhpParser(),
-    "javascript": JavaScriptParser(),
-}
-
-RESOLVERS = {
-    "php": PhpResolver(),
-    "javascript": JavaScriptResolver(),
-    "python": PythonResolver(),
-}
-
-PROJECT_ROOT = os.path.dirname(_TOOLS_DIR)                # raiz do repo Documentar
+PROJECT_ROOT = os.path.dirname(_TOOLS_DIR) # raiz do repo Documentar
 DEFAULT_IGNORED_FOLDERS_FILE = os.path.join(PROJECT_ROOT, "ignored_folders.txt")
 ARTIFACTS_DIR = os.path.join(PROJECT_ROOT, "artifacts")
 
@@ -76,7 +57,7 @@ def list_files(root, excluded):
 
 
 def process_file(absolute_path, relative_path, language):
-    parser = PARSERS.get(language)
+    parser = LANGUAGE_SUPPORT.parsers().get(language)
     if parser is None:
         return {
             "path": relative_path, "language": language, "status": "unsupported",
@@ -131,7 +112,7 @@ def main():
     by_language = defaultdict(list)
     for result in results:
         by_language[result["language"]].append(result)
-    for language, resolver in RESOLVERS.items():
+    for language, resolver in LANGUAGE_SUPPORT.supported_languages().items():
         resolver.resolve(by_language.get(language, []), root)
 
     resolution_counts = {}
@@ -146,15 +127,12 @@ def main():
                 "builtin": builtin_imports, "external": external_imports,
             }
 
-    metadata = {
-        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "root": root,
-        "git": get_git_info(root),
-        "command": "dependency.py " + " ".join(sys.argv[1:]),
-        "files": len(results),
-        "by_status": status_counts,
-        "resolution": resolution_counts,
-    }
+    metadata = (
+        Metadata(root, [r["language"] for r in results])
+        .add_custom_field("by_status", status_counts)
+        .add_custom_field("resolution", resolution_counts)
+        .to_dict()
+    )
 
     os.makedirs(out_dir, exist_ok=True)
     json_path = os.path.join(out_dir, "dependencies.json")
