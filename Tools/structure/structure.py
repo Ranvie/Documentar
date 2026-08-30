@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Uso:
-  python Tools/structure/structure.py <project_name> [--sort-by fan-in|fan-out]
+  python Tools/structure/structure.py --project-name <nome> [--sort-by fan-in|fan-out]
 """
 from __future__ import annotations
 
@@ -25,28 +25,25 @@ def is_internal_import(imp: dict) -> bool:
     return bool(imp.get("resolved_path")) and not imp.get("builtin") and not imp.get("external")
 
 
-def internal_targets(f: dict) -> set:
+def internal_targets(f: dict, known_paths: set) -> set:
     targets = {imp["resolved_path"] for imp in f["imports"] if is_internal_import(imp)}
     for symbol in f.get("symbols", []):
         for category in ("extends", "implements"):
             for ref in symbol.get(category, []):
                 if is_internal_import(ref):
                     targets.add(ref["resolved_path"])
-    return targets
+    return targets & known_paths
 
 
 def compute_fan_metrics(files: list) -> tuple:
-    """Retorna (fan_out_por_path, fan_in_por_path): fan_out conta arquivos distintos
-    referenciados (import ou extends/implements); fan_in conta arquivos distintos que
-    referenciam de volta, nao ocorrencias brutas."""
+    known_paths = {f["path"] for f in files}
     fan_out = {}
-    incoming = {f["path"]: set() for f in files}
+    incoming = {path: set() for path in known_paths}
     for f in files:
-        targets = internal_targets(f)
+        targets = internal_targets(f, known_paths)
         fan_out[f["path"]] = len(targets)
         for target in targets:
-            if target in incoming:
-                incoming[target].add(f["path"])
+            incoming[target].add(f["path"])
     fan_in = {path: len(sources) for path, sources in incoming.items()}
     return fan_out, fan_in
 
@@ -142,16 +139,16 @@ def sort_tree(node: dict, metric_field: str) -> dict:
 
 def main():
     ap = argparse.ArgumentParser(description="Mapa de calor (fan-in/fan-out) por arquivo e por pasta.")
-    ap.add_argument("project_name", help="Nome do projeto (mesma pasta usada em artifacts/<projeto>/...)")
-    ap.add_argument("--dependencies-json", default=None, help="Caminho pro dependencies.json (default: artifacts/<projeto>/auto-generated/out-dependencies/dependencies.json)")
-    ap.add_argument("--out-dir", default=None, help="Pasta de saida (default: artifacts/<projeto>/auto-generated/out-structure)")
+    ap.add_argument("--project-name", required=True, help="Nome do projeto (mesma pasta usada em artifacts/<projeto>/...)")
+    ap.add_argument("--auto-generated-dir", default=None, help="Raiz de auto-generated do projeto (default: artifacts/<projeto>/auto-generated)")
+    ap.add_argument("--dependencies-json", default=None, help="Caminho pro dependencies.json (default: {auto-generated-dir}/out-dependencies/dependencies.json)")
+    ap.add_argument("--out-dir", default=None, help="Pasta de saida (default: {auto-generated-dir}/out-structure)")
     ap.add_argument("--sort-by", choices=["fan-in", "fan-out"], default="fan-in", help="Metrica usada pro arquivo ordenado (default: fan-in)")
     args = ap.parse_args()
 
-    dependencies_json = args.dependencies_json or os.path.join(
-        ARTIFACTS_DIR, args.project_name, "auto-generated", "out-dependencies", "dependencies.json"
-    )
-    out_dir = args.out_dir or os.path.join(ARTIFACTS_DIR, args.project_name, "auto-generated", "out-structure")
+    auto_generated_dir = args.auto_generated_dir or os.path.join(ARTIFACTS_DIR, args.project_name, "auto-generated")
+    dependencies_json = args.dependencies_json or os.path.join(auto_generated_dir, "out-dependencies", "dependencies.json")
+    out_dir = args.out_dir or os.path.join(auto_generated_dir, "out-structure")
 
     if not os.path.isfile(dependencies_json):
         sys.exit(f"dependencies.json nao encontrado: {dependencies_json} (rode dependency.py antes)")

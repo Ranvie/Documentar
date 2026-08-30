@@ -118,18 +118,20 @@ class PhpResolver(LanguageResolver):
                 raw = imp["raw"]
                 if imp["kind"] in _KINDS_COM_NOME_CURTO:
                     raw = local_alias.get(raw.lstrip("\\"), raw)
-                imp["resolved_path"], imp["builtin"] = self._finalize(raw, classmap, psr4, own_index, by_short_name, root)
+                imp["resolved_path"], imp["builtin"], imp["external"] = self._finalize(raw, classmap, psr4, own_index, by_short_name, root)
 
             for symbol in file["symbols"]:
                 for ref in symbol["extends"] + symbol["implements"]:
                     raw = local_alias.get(ref["raw"].lstrip("\\"), ref["raw"])
-                    ref["resolved_path"], ref["builtin"] = self._finalize(raw, classmap, psr4, own_index, by_short_name, root)
+                    ref["resolved_path"], ref["builtin"], ref["external"] = self._finalize(raw, classmap, psr4, own_index, by_short_name, root)
 
     def _finalize(self, raw, classmap, psr4, own_index, by_short_name, root):
         raw = raw.lstrip("\\")
         if raw.lower() in _BUILTIN_CLASSES_LOWER:
-            return None, True
-        return self._resolve_one(raw, classmap, psr4, own_index, by_short_name, root), False
+            return None, True, False
+        resolved_path = self._resolve_one(raw, classmap, psr4, own_index, by_short_name, root)
+        external = bool(resolved_path) and resolved_path.split("/", 1)[0] == "vendor"
+        return resolved_path, False, external
 
     def _resolve_one(self, qualified_name, classmap, psr4, own_index, by_short_name, root) -> Optional[str]:
         if classmap and qualified_name in classmap:

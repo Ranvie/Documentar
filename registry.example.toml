@@ -1,0 +1,14 @@
+# Copie este arquivo para registry.toml e ajuste os paths para a sua maquina.
+# registry.toml e local (esta no .gitignore) porque path e absoluto e muda por maquina.
+
+[[projects]]
+name = "meu-projeto"
+path = "/caminho/absoluto/para/o/projeto"
+
+  [[projects.steps]]
+  tool = "dependency/dependency.py"
+  args = []
+
+  [[projects.steps]]
+  tool = "structure/structure.py"
+  args = []

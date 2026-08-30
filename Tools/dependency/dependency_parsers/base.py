@@ -9,6 +9,7 @@ class ClassRef:
     raw: str
     resolved_path: Optional[str] = None
     builtin: bool = False
+    external: bool = False
 
 
 @dataclass

@@ -11,6 +11,13 @@ env/
 
 # Saídas geradas
 artifacts/
+artifacts-temp/
+
+# Log de falhas do regenerate.py
+errors/
+
+# Config local do regenerate.py (paths absolutos especificos da maquina)
+registry.toml
 
 # Anotações soltas de design, não é pra versionar
 findings.txt
