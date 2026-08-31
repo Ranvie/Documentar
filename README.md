@@ -8,11 +8,9 @@ Princípio central: separar fato mecânico (dependências, estrutura) de julgame
 
 **Granularidade: um projeto por vez.** Cada execução escaneia UM projeto e gera artefatos só pra ele, em `artifacts/<projeto>/`. Isso é proposital — a ideia é que vários projetos reais (ex: `cuidepet-back`, `cuidepet-front`, `cuidepet-form`) convivam lado a lado dentro de `artifacts/`, cada um com sua própria documentação mecânica, **sem** a ferramenta tentar adivinhar como eles se comunicam entre si nessa etapa. Essa conexão (o que chama a API de quem, o que consome qual biblioteca de qual outro projeto) é uma camada posterior — construída em cima do levantamento bruto de cada projeto individual, não junto com ele. Nesse momento o objetivo não é saber *como* os projetos se falam, é só saber que eles *existem*.
 
-**Estado atual:** só a parte de mapeamento de dependências existe (por projeto individual). O resto — estrutura de pastas, packages, arquitetura, BusinessRules, e a camada futura que conecta os projetos entre si — ainda não foi implementado.
+**Estado atual:** mapeamento de dependências e mapa de calor de fan-in/fan-out já existem (por projeto individual), orquestrados pelo `regenerate.py`. O resto — packages, arquitetura, BusinessRules, e a camada futura que conecta os projetos entre si — ainda não foi implementado.
 
 ## Como usar
-
-Por hora só tem o mapeador de dependências.
 
 ### Instalação
 
@@ -20,7 +18,23 @@ Por hora só tem o mapeador de dependências.
 pip install -r requirements.txt
 ```
 
-### Mapear dependências de um projeto
+### Rodar tudo pra um projeto (`regenerate.py`)
+
+Copie [registry.example.toml](registry.example.toml) para `registry.toml` (fica fora do git — os paths são absolutos e específicos da máquina) e ajuste `path` pros projetos reais.
+
+```
+python regenerate.py                              # roda todos os projetos do registry.toml
+python regenerate.py <nome>                        # roda so um projeto ja cadastrado
+python regenerate.py --path <path> --name <nome>   # cadastra/atualiza o projeto e roda
+```
+
+Cada projeto no `registry.toml` tem uma lista de `steps` (ferramenta de `Tools/` + `args`), executados em ordem. O resultado de uma rodada é montado numa pasta de staging (`artifacts-temp/`) e só substitui o `artifacts/<projeto>/auto-generated/` definitivo se **todos** os steps de **todos** os projetos do escopo pedido tiverem sucesso — se algo falhar, nada é trocado e o staging é descartado. Falhas ficam registradas em `errors/YYYY-MM-DD_HH-mm-ss.json` (projeto, step, comando e stderr completo).
+
+### Rodar uma ferramenta isolada (debug/manual)
+
+Fora do `regenerate.py`, cada ferramenta em `Tools/` também roda sozinha — útil pra debug. Toda ferramenta aceita `--project-name` e `--auto-generated-dir` (raiz de `auto-generated/` do projeto); sem eles, cai no default `artifacts/<projeto>/auto-generated/`.
+
+#### Mapeador de dependências
 
 ```
 python Tools/dependency/dependency.py <pasta_raiz> [--project-name nome]
@@ -28,16 +42,34 @@ python Tools/dependency/dependency.py <pasta_raiz> [--project-name nome]
 
 - `<pasta_raiz>`: pasta do projeto a escanear (não precisa ser este repositório — é sempre um projeto externo sendo documentado).
 - `--project-name`: nome usado para organizar a saída (default: nome da pasta escaneada).
+- `--auto-generated-dir`: raiz de `auto-generated/` do projeto (default: `artifacts/<projeto>/auto-generated`).
 - `--exclude a,b`: pastas extras a ignorar além do [ignored_folders.txt](ignored_folders.txt) padrão.
-- `--out-dir`: sobrescreve a pasta de saída inteira (raramente necessário).
+- `--out-dir`: sobrescreve só a pasta de saída (raramente necessário — normalmente basta `--auto-generated-dir`).
 
 Roda em duas fases: **extração** (lê cada arquivo, identifica classes/funções/imports via tree-sitter) e **resolução** (conecta cada import ao arquivo real que ele referencia — Composer/PSR-4 no PHP, `sys.path` no Python, caminho relativo no JS). O resultado sai em:
 
 ```
-artifacts/<projeto>/auto-generated/out-dependencies/dependencies.json
+{auto-generated-dir}/out-dependencies/dependencies.json
 ```
 
-`artifacts/auto-generated` é gerado automaticamente (está no `.gitignore`) — nunca editar nada ali à mão.
+#### Mapa de calor (fan-in/fan-out)
+
+```
+python Tools/structure/structure.py --project-name <nome> [--sort-by fan-in|fan-out]
+```
+
+- `--project-name`: obrigatório — usado para achar o `dependencies.json` do projeto (rode o mapeador de dependências antes) e organizar a saída.
+- `--auto-generated-dir`: raiz de `auto-generated/` do projeto (default: `artifacts/<projeto>/auto-generated`).
+- `--sort-by fan-in|fan-out`: métrica usada pra ordenar a árvore no segundo arquivo de saída (default: `fan-in`).
+
+Lê o `dependencies.json` já resolvido e calcula, por arquivo e por pasta (rollup), quantos arquivos internos cada um referencia (fan-out) e é referenciado por (fan-in). Gera:
+
+```
+{auto-generated-dir}/out-structure/structure.json
+{auto-generated-dir}/out-structure/ordered-<fan-in|fan-out>-structure.json
+```
+
+`artifacts/` é gerado automaticamente (está no `.gitignore`) — nunca editar nada ali à mão.
 
 ### Visualizar o grafo (opcional)
 
