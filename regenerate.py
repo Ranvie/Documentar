@@ -141,10 +141,16 @@ def swap_into_place(name: str) -> None:
         project_temp_dir.rmdir()
 
 
+def discard_temp() -> None:
+    if TEMP_DIR.exists():
+        shutil.rmtree(TEMP_DIR)
+
+
 def run_all(doc) -> None:
     projects = list(doc.get("projects", []))
     for project in projects:
         if not run_project(project):
+            discard_temp()
             sys.exit(f"Rebuild interrompido no projeto '{project['name']}'.")
     for project in projects:
         swap_into_place(project["name"])
@@ -153,6 +159,7 @@ def run_all(doc) -> None:
 
 def run_single(project) -> None:
     if not run_project(project):
+        discard_temp()
         sys.exit(f"Rebuild do projeto '{project['name']}' falhou.")
     swap_into_place(project["name"])
     print(f"Rebuild completo: projeto '{project['name']}' atualizado.")
