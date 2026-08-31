@@ -80,6 +80,7 @@ class PhpParser(LanguageParser):
 
     def _walk(self, node, source, symbols, imports, namespace, class_name):
         for child in node.children:
+            self._check_expr(child, source, imports)
             if child.type in _DECLARATION_KIND:
                 name = self._direct_name(child, source)
                 if name is None:
@@ -140,7 +141,7 @@ class PhpParser(LanguageParser):
         target = next((c for c in node.children[:idx] if c.type in _NAME_TYPES), None)
         return self._text(target, source) if target is not None else None
 
-    def _walk_body(self, node, source, imports):
+    def _check_expr(self, node, source, imports):
         line = node.start_point[0] + 1
 
         if node.type == "object_creation_expression":
@@ -166,6 +167,8 @@ class PhpParser(LanguageParser):
             for type_name in self._type_names(node, source):
                 imports.append(Import(kind="catch_type", raw=type_name, line=line))
 
+    def _walk_body(self, node, source, imports):
+        self._check_expr(node, source, imports)
         for child in node.children:
             self._walk_body(child, source, imports)
 
