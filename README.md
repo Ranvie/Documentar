@@ -10,6 +10,25 @@ Princípio central: separar fato mecânico (dependências, estrutura) de julgame
 
 **Estado atual:** só a parte de mapeamento de dependências existe (por projeto individual). O resto — estrutura de pastas, packages, arquitetura, BusinessRules, e a camada futura que conecta os projetos entre si — ainda não foi implementado.
 
+## Roadmap
+
+O projeto é dividido em camadas, da mais determinística pra mais aberta:
+
+1. **Mecânica (scripts)** — Individual por projeto. Fato puro extraído do código por script, sem IA: dependências entre arquivos, estrutura de pastas, linguagens usadas. Determinístico, sempre regerado do zero, nunca editado à mão.
+   **Estado: em andamento** — mapeamento de dependências já existe (PHP/Python/JS, ver seção "Linguagens suportadas"); estrutura de pastas ainda não.
+
+2. **Interconexão (script + LLM)** — Camada que tenta achar as conexões *entre* projetos que a Mecânica deliberadamente não vê: o JS `XYZ` chama o PHP `ABC`, o front `FGH` consome a rota `HIJ`, e por aí vai. Combina script (achar candidatos — ex: strings de URL, chamadas HTTP, nomes de rota) com julgamento de LLM (confirmar a ligação). Construída em cima do levantamento bruto de cada projeto individual, não junto com ele.
+   **Estado: não implementado.**
+
+3. **Versionador** — Acompanha como a documentação gerada muda ao longo do tempo conforme o código muda, permitindo comparar entre versões sem precisar regerar tudo do zero.
+   **Estado: não implementado.**
+
+4. **Inteligência do projeto** — Camada de julgamento sobre o material bruto já levantado pelas camadas anteriores: regras de negócio, arquitetura, decisões de design — o que exige entender intenção, não só fato mecânico. Gerada como rascunho e sempre revisada por humano, nunca fonte de verdade sozinha. Pós integração com o versionador vai ser capaz de encontrar via script, toda documentação que deve ser analisada a cada atualização do código.
+   **Estado: não implementado.**
+
+5. **Extensões** — Você escreve suas próprias ferramentas em cima da estrutura existente (ex: um novo resolver de linguagem, um novo formato de saída, um novo tipo de análise) sem precisar mexer no core.
+   **Estado: não implementado** — mas a separação já existente entre `dependency_parsers/` e `dependency_resolvers/` foi pensada com isso em mente.
+
 ## Como usar
 
 Por hora só tem o mapeador de dependências.
