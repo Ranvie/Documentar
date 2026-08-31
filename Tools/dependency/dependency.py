@@ -34,9 +34,7 @@ DEFAULT_IGNORED_FOLDERS_FILE = os.path.join(PROJECT_ROOT, "ignored_folders.txt")
 ARTIFACTS_DIR = os.path.join(PROJECT_ROOT, "artifacts")
 
 
-def load_ignored_folders(path):
-    if not os.path.isfile(path):
-        sys.exit(f"Arquivo de pastas ignoradas nao encontrado: {path}")
+def _read_folder_list(path):
     ignored = set()
     with open(path, "r", encoding="utf-8") as f:
         for linha in f:
@@ -44,6 +42,20 @@ def load_ignored_folders(path):
             if nome:
                 ignored.add(nome)
     return ignored
+
+
+def load_ignored_folders(path):
+    if not os.path.isfile(path):
+        sys.exit(f"Arquivo de pastas ignoradas nao encontrado: {path}")
+    return _read_folder_list(path)
+
+
+def load_ignored_folders_optional(path):
+    """Igual load_ignored_folders, mas pra config por projeto: se o arquivo
+    ainda nao existe (projeto nunca foi ajustado a mao), so' nao soma nada."""
+    if not path or not os.path.isfile(path):
+        return set()
+    return _read_folder_list(path)
 
 
 def list_files(root, excluded):
@@ -88,15 +100,22 @@ def main():
     ap.add_argument("--auto-generated-dir", default=None, help="Raiz de auto-generated do projeto (default: {raiz do repo}/artifacts/{projeto}/auto-generated)")
     ap.add_argument("--out-dir", default=None, help="Pasta de saida (default: {auto-generated-dir}/out-dependencies)")
     ap.add_argument("--exclude", default="", help="Pastas extras a ignorar, separadas por virgula")
-    ap.add_argument("--ignored-folders-file", default=DEFAULT_IGNORED_FOLDERS_FILE, help="Arquivo com a lista de pastas puladas (default: ignored_folders.txt na raiz do projeto)")
+    ap.add_argument("--ignored-folders-file", default=DEFAULT_IGNORED_FOLDERS_FILE, help="Arquivo com pastas puladas comuns a qualquer projeto (default: ignored_folders.txt na raiz do Documentar)")
+    ap.add_argument("--project-ignored-folders-file", default=None, help="Arquivo com pastas puladas especificas deste projeto, somado ao --ignored-folders-file (default: artifacts/{projeto}/ignored_folders.txt, se existir)")
     args = ap.parse_args()
 
     root = os.path.abspath(args.root)
     project_name = args.project_name or os.path.basename(root.rstrip(os.sep).rstrip("/"))
-    auto_generated_dir = args.auto_generated_dir or os.path.join(ARTIFACTS_DIR, project_name, "auto-generated")
+    project_dir = os.path.join(ARTIFACTS_DIR, project_name)
+    auto_generated_dir = args.auto_generated_dir or os.path.join(project_dir, "auto-generated")
     out_dir = args.out_dir or os.path.join(auto_generated_dir, "out-dependencies")
+    project_ignored_folders_file = args.project_ignored_folders_file or os.path.join(project_dir, "ignored_folders.txt")
     extra_dirs = {d.strip() for d in args.exclude.split(",") if d.strip()}
-    excluded = load_ignored_folders(args.ignored_folders_file) | extra_dirs
+    excluded = (
+        load_ignored_folders(args.ignored_folders_file)
+        | load_ignored_folders_optional(project_ignored_folders_file)
+        | extra_dirs
+    )
 
     print(f"Escaneando {root} ...", file=sys.stderr)
     files = list(list_files(root, excluded))

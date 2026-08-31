@@ -164,17 +164,17 @@ class PhpResolver(LanguageResolver):
             found = _psr4_lookup(qualified_name, psr4)
             if found:
                 return os.path.relpath(found, root).replace(os.sep, "/")
+        short_name = qualified_name.rsplit("\\", 1)[-1]
         own_candidates = own_index.get(qualified_name)
         if own_candidates:
-            return self._pick_closest(own_candidates, from_path)
-        short_name = qualified_name.rsplit("\\", 1)[-1]
+            return self._pick_closest(own_candidates, from_path, short_name)
         candidates = by_short_name.get(short_name)
         if candidates:
-            return self._pick_closest(candidates, from_path)
+            return self._pick_closest(candidates, from_path, short_name)
         return None
 
     @staticmethod
-    def _pick_closest(candidates: list, from_path: str) -> Optional[str]:
+    def _pick_closest(candidates: list, from_path: str, short_name: str) -> Optional[str]:
         if len(candidates) == 1:
             return candidates[0]
 
@@ -191,7 +191,13 @@ class PhpResolver(LanguageResolver):
 
         scored = sorted(((shared_prefix_len(c), c) for c in candidates), key=lambda item: item[0], reverse=True)
         best_score = scored[0][0]
-        if best_score == 0:
-            return None
-        best = [c for score, c in scored if score == best_score]
-        return best[0] if len(best) == 1 else None
+        tied = [c for score, c in scored if score == best_score]
+        if len(tied) == 1 and best_score > 0:
+            return tied[0]
+
+        expected_basenames = {f"{short_name}.php", f"{short_name}.class.php", f"{short_name}.trait.php", f"{short_name}.interface.php"}
+        matching = [c for c in tied if c.rsplit("/", 1)[-1] in expected_basenames]
+        if len(matching) == 1:
+            return matching[0]
+
+        return None
