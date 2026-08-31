@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import re
+
 from tree_sitter import Language, Parser
 import tree_sitter_php as tsphp
 
 from .base import LanguageParser, FileParseResult, Symbol, Import, ClassRef
 
 _LANGUAGE = Language(tsphp.language_php())
+
+_RE_USE_LEADING_BACKSLASH = re.compile(rb"(?m)^(\s*use\s+)\\")
 
 _DECLARATION_KIND = {
     "class_declaration": "class",
@@ -30,6 +34,7 @@ class PhpParser(LanguageParser):
         self._parser = Parser(_LANGUAGE)
 
     def parse(self, path: str, source: bytes) -> FileParseResult:
+        source = _RE_USE_LEADING_BACKSLASH.sub(rb"\1 ", source)
         tree = self._parser.parse(source)
         symbols: list[Symbol] = []
         imports: list[Import] = []
