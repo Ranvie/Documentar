@@ -1,0 +1,100 @@
+# Globals do JavaScript (construtores - Error, Array, Map, Promise, ...)
+# que comecam com maiuscula e sao "function" no globalThis - nunca tem
+# arquivo .js de verdade pra apontar, entao o javascript_resolver.py usa
+# essa lista pra marcar import["builtin"]/ClassRef.builtin = true em vez de
+# deixar resolved_path=null sem explicacao.
+#
+# Gerado automaticamente por generate_javascript_builtins.py em 2026-08-31
+# (Node v20.20.0). Inclui tanto ECMAScript puro (Error/Array/Map/...) quanto
+# Web APIs globais no Node (fetch, streams, crypto) - uteis porque esse
+# parser tambem le codigo de front-end que roda no navegador. Pra atualizar:
+#   python Tools/dependency/dependency_resolvers/generate_javascript_builtins.py
+
+AbortController
+AbortSignal
+AggregateError
+Array
+ArrayBuffer
+BigInt
+BigInt64Array
+BigUint64Array
+Blob
+Boolean
+BroadcastChannel
+Buffer
+ByteLengthQueuingStrategy
+CompressionStream
+CountQueuingStrategy
+Crypto
+CryptoKey
+CustomEvent
+DOMException
+DataView
+Date
+DecompressionStream
+Error
+EvalError
+Event
+EventTarget
+File
+FinalizationRegistry
+Float32Array
+Float64Array
+FormData
+Function
+Headers
+Int16Array
+Int32Array
+Int8Array
+Map
+MessageChannel
+MessageEvent
+MessagePort
+Number
+Object
+Performance
+PerformanceEntry
+PerformanceMark
+PerformanceMeasure
+PerformanceObserver
+PerformanceObserverEntryList
+PerformanceResourceTiming
+Promise
+Proxy
+RangeError
+ReadableByteStreamController
+ReadableStream
+ReadableStreamBYOBReader
+ReadableStreamBYOBRequest
+ReadableStreamDefaultController
+ReadableStreamDefaultReader
+ReferenceError
+RegExp
+Request
+Response
+Set
+SharedArrayBuffer
+String
+SubtleCrypto
+Symbol
+SyntaxError
+TextDecoder
+TextDecoderStream
+TextEncoder
+TextEncoderStream
+TransformStream
+TransformStreamDefaultController
+TypeError
+URIError
+URL
+URLSearchParams
+Uint16Array
+Uint32Array
+Uint8Array
+Uint8ClampedArray
+WeakMap
+WeakRef
+WeakSet
+WritableStream
+WritableStreamDefaultController
+WritableStreamDefaultWriter

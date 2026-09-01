@@ -5,7 +5,7 @@ import re
 from collections import defaultdict
 from typing import Optional
 
-from .base import LanguageResolver
+from .base import LanguageResolver, load_builtin_names
 
 _RE_CLASSMAP_ENTRY = re.compile(
     r"'((?:[^'\\]|\\.)*)'\s*=>\s*\$(vendorDir|baseDir)\s*\.\s*'((?:[^'\\]|\\.)*)'"
@@ -20,26 +20,11 @@ _KINDS_COM_NOME_CURTO = (
     "instanceof", "catch_type",
 )
 
-_BUILTIN_CLASSES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "php_builtin_classes.txt")
+_DEFAULT_BUILTIN_CLASSES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "php_builtin_classes.txt")
 
 
 def _unescape_php_string(s: str) -> str:
     return s.replace("\\\\", "\\").replace("\\'", "'")
-
-
-def _load_builtin_classes(path) -> set:
-    names = set()
-    if not os.path.isfile(path):
-        return names
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            name = line.split("#", 1)[0].strip()
-            if name:
-                names.add(name.lower())
-    return names
-
-
-_BUILTIN_CLASSES_LOWER = _load_builtin_classes(_BUILTIN_CLASSES_PATH)
 
 
 def _find_composer_project_dirs(root: str) -> list:
@@ -113,6 +98,9 @@ def _psr4_lookup(qualified_name: str, psr4) -> Optional[str]:
 class PhpResolver(LanguageResolver):
     language = "php"
 
+    def __init__(self, builtin_classes_file=_DEFAULT_BUILTIN_CLASSES_FILE):
+        self._builtin_names = load_builtin_names(builtin_classes_file)
+
     def resolve(self, files: list, root: str) -> None:
         classmap, psr4 = _load_composer_maps(root)
 
@@ -151,7 +139,7 @@ class PhpResolver(LanguageResolver):
 
     def _finalize(self, raw, classmap, psr4, own_index, by_short_name, root, from_path):
         raw = raw.lstrip("\\")
-        if raw.lower() in _BUILTIN_CLASSES_LOWER:
+        if raw.lower() in self._builtin_names:
             return None, True, False
         resolved_path = self._resolve_one(raw, classmap, psr4, own_index, by_short_name, root, from_path)
         external = bool(resolved_path) and "vendor" in resolved_path.split("/")
