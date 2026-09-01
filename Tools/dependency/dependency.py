@@ -18,6 +18,7 @@ sys.path.insert(0, _TOOLS_DIR)
 
 from metadata import Metadata
 from language_support import LANGUAGE_SUPPORT
+from file_scanner import scan_files, load_ignored_folders, load_ignored_folders_optional
 
 EXTENSION_TO_LANGUAGE = {
     ".py": "python",
@@ -34,38 +35,12 @@ DEFAULT_IGNORED_FOLDERS_FILE = os.path.join(PROJECT_ROOT, "ignored_folders.txt")
 ARTIFACTS_DIR = os.path.join(PROJECT_ROOT, "artifacts")
 
 
-def _read_folder_list(path):
-    ignored = set()
-    with open(path, "r", encoding="utf-8") as f:
-        for linha in f:
-            nome = linha.split("#", 1)[0].strip()
-            if nome:
-                ignored.add(nome)
-    return ignored
-
-
-def load_ignored_folders(path):
-    if not os.path.isfile(path):
-        sys.exit(f"Arquivo de pastas ignoradas nao encontrado: {path}")
-    return _read_folder_list(path)
-
-
-def load_ignored_folders_optional(path):
-    """Igual load_ignored_folders, mas pra config por projeto: se o arquivo
-    ainda nao existe (projeto nunca foi ajustado a mao), so' nao soma nada."""
-    if not path or not os.path.isfile(path):
-        return set()
-    return _read_folder_list(path)
-
-
 def list_files(root, excluded):
-    for current, subdirs, files in os.walk(root):
-        subdirs[:] = [d for d in subdirs if d not in excluded and not d.startswith(".")]
-        for name in files:
-            ext = os.path.splitext(name)[1].lower()
-            if ext not in EXTENSION_TO_LANGUAGE:
-                continue
-            yield os.path.join(current, name), EXTENSION_TO_LANGUAGE[ext]
+    for absolute_path, relative_path in scan_files(root, excluded):
+        ext = os.path.splitext(relative_path)[1].lower()
+        if ext not in EXTENSION_TO_LANGUAGE:
+            continue
+        yield absolute_path, relative_path, EXTENSION_TO_LANGUAGE[ext]
 
 
 def process_file(absolute_path, relative_path, language):
@@ -123,8 +98,7 @@ def main():
 
     results = []
     status_counts = {}
-    for absolute_path, language in files:
-        relative_path = os.path.relpath(absolute_path, root).replace(os.sep, "/")
+    for absolute_path, relative_path, language in files:
         info = process_file(absolute_path, relative_path, language)
         results.append(info)
         status_counts[info["status"]] = status_counts.get(info["status"], 0) + 1
