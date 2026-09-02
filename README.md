@@ -17,17 +17,20 @@ O projeto é dividido em camadas, da mais determinística pra mais aberta:
 1. **Mecânica (scripts)** — Individual por projeto. Fato puro extraído do código por script, sem IA: dependências entre arquivos, estrutura de pastas, dependências externas, linguagens usadas. Determinístico, sempre regerado do zero, nunca editado à mão.
    **Estado: em andamento** — dependências internas (PHP/Python/JS, ver "Linguagens suportadas"), estrutura em mapa de calor fan-in/fan-out e dependências externas (Composer/npm/pip) já existem. Falta ampliar cobertura de linguagem (Vue/TypeScript, outros ecossistemas de pacote) e uma leitura mais rica de estrutura além do fan-in/fan-out.
 
-2. **Interconexão (script + LLM)** — Camada que tenta achar as conexões *entre* projetos que a Mecânica deliberadamente não vê: o JS `XYZ` chama o PHP `ABC`, o front `FGH` consome a rota `HIJ`, e por aí vai. Combina script (achar candidatos — ex: strings de URL, chamadas HTTP, nomes de rota) com julgamento de LLM (confirmar a ligação). Construída em cima do levantamento bruto de cada projeto individual, não junto com ele.
-   **Estado: não implementado.**
-
-3. **Versionador** — Acompanha como a documentação gerada muda ao longo do tempo conforme o código muda, permitindo comparar entre versões sem precisar regerar tudo do zero.
-   **Estado: não implementado.**
-
-4. **Inteligência do projeto** — Camada de julgamento sobre o material bruto já levantado pelas camadas anteriores: regras de negócio, arquitetura, decisões de design — o que exige entender intenção, não só fato mecânico. Gerada como rascunho e sempre revisada por humano, nunca fonte de verdade sozinha. Pós integração com o versionador vai ser capaz de encontrar via script, toda documentação que deve ser analisada a cada atualização do código.
-   **Estado: não implementado.**
-
-5. **Extensões** — Você escreve suas próprias ferramentas em cima da estrutura existente (ex: um novo resolver de linguagem, um novo formato de saída, um novo tipo de análise) sem precisar mexer no core.
+2. **Extensões + Refatorações** — Antes de empilhar as camadas seguintes em cima da Mecânica, consolidar a base: expor um jeito claro de escrever suas próprias ferramentas por cima da estrutura existente (ex: um novo resolver de linguagem, um novo formato de saída, um novo tipo de análise) sem precisar mexer no core, e refatorar o que for preciso pra isso ficar simples.
    **Estado: não implementado** — mas a separação já existente entre `dependency_parsers/` e `dependency_resolvers/` foi pensada com isso em mente.
+
+3. **Interconexão (script + LLM)** — Camada que tenta achar as conexões *entre* projetos que a Mecânica deliberadamente não vê: o JS `XYZ` chama o PHP `ABC`, o front `FGH` consome a rota `HIJ`, e por aí vai. Combina script (achar candidatos — ex: strings de URL, chamadas HTTP, nomes de rota) com julgamento de LLM (confirmar a ligação). Construída em cima do levantamento bruto de cada projeto individual, não junto com ele.
+   **Estado: não implementado.**
+
+4. **Versionador** — Acompanha como a documentação gerada muda ao longo do tempo conforme o código muda, permitindo comparar entre versões sem precisar regerar tudo do zero.
+   **Estado: não implementado.**
+
+5. **Inteligência do projeto** — Camada de julgamento sobre o material bruto já levantado pelas camadas anteriores: regras de negócio, arquitetura, decisões de design — o que exige entender intenção, não só fato mecânico. Gerada como rascunho e sempre revisada por humano, nunca fonte de verdade sozinha. Pós integração com o versionador vai ser capaz de encontrar via script, toda documentação que deve ser analisada a cada atualização do código.
+   **Estado: não implementado.**
+
+6. **UI** — Interface (Vue ou outro framework) que consome a pasta `artifacts/` pra apresentar tudo de forma interativa a um humano: diff entre versões de um arquivo de documentação, o que mudou de um desenvolvimento pro outro, o grafo de dependências, resumo da estrutura de pastas, mapa de calor, etc. Os artefatos em `artifacts/` continuam existindo pensados pra consumo por ferramenta (IA, principalmente) — a UI é uma camada de apresentação por cima, não substitui isso.
+   **Estado: não implementado.**
 
 ## Como usar
 
