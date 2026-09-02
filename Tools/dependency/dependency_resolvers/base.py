@@ -1,19 +1,22 @@
 from __future__ import annotations
 
+import os
+
+
+def load_builtin_names(path) -> frozenset:
+    if not path or not os.path.isfile(path):
+        return frozenset()
+    names = set()
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            name = line.split("#", 1)[0].strip()
+            if name:
+                names.add(name.lower())
+    return frozenset(names)
+
 
 class LanguageResolver:
-    """Interface que cada dependency_resolvers/<lang>_resolver.py implementa.
-
-    Roda depois que TODOS os arquivos do projeto ja foram extraidos (fase 1),
-    nunca arquivo a arquivo: resolver um import exige saber o que os OUTROS
-    arquivos declaram, informacao que so existe depois da extracao completa.
-    Cada linguagem resolve do seu proprio jeito (Composer/PSR-4 no PHP,
-    node_modules/tsconfig no JS/TS, etc.) - essa classe so' fixa o contrato.
-    """
-
     language: str
 
     def resolve(self, files: list, root: str) -> None:
-        """Preenche import["resolved_path"] em `files` (lista de dict, no
-        formato de FileParseResult.to_dict()), em memoria (in-place)."""
         raise NotImplementedError

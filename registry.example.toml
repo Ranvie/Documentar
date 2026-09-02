@@ -12,3 +12,7 @@ path = "/caminho/absoluto/para/o/projeto"
   [[projects.steps]]
   tool = "structure/structure.py"
   args = []
+
+  [[projects.steps]]
+  tool = "packages/packages.py"
+  args = []

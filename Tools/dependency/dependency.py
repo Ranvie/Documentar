@@ -10,7 +10,7 @@ import argparse
 import json
 import os
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 _HERE = os.path.dirname(os.path.abspath(__file__)) # Tools/dependency
 _TOOLS_DIR = os.path.dirname(_HERE)                # Tools
@@ -18,6 +18,7 @@ sys.path.insert(0, _TOOLS_DIR)
 
 from metadata import Metadata
 from language_support import LANGUAGE_SUPPORT
+from file_scanner import scan_files, load_ignored_folders, load_ignored_folders_optional
 
 EXTENSION_TO_LANGUAGE = {
     ".py": "python",
@@ -34,26 +35,10 @@ DEFAULT_IGNORED_FOLDERS_FILE = os.path.join(PROJECT_ROOT, "ignored_folders.txt")
 ARTIFACTS_DIR = os.path.join(PROJECT_ROOT, "artifacts")
 
 
-def load_ignored_folders(path):
-    if not os.path.isfile(path):
-        sys.exit(f"Arquivo de pastas ignoradas nao encontrado: {path}")
-    ignored = set()
-    with open(path, "r", encoding="utf-8") as f:
-        for linha in f:
-            nome = linha.split("#", 1)[0].strip()
-            if nome:
-                ignored.add(nome)
-    return ignored
-
-
 def list_files(root, excluded):
-    for current, subdirs, files in os.walk(root):
-        subdirs[:] = [d for d in subdirs if d not in excluded and not d.startswith(".")]
-        for name in files:
-            ext = os.path.splitext(name)[1].lower()
-            if ext not in EXTENSION_TO_LANGUAGE:
-                continue
-            yield os.path.join(current, name), EXTENSION_TO_LANGUAGE[ext]
+    for absolute_path, relative_path in scan_files(root, excluded):
+        ext = os.path.splitext(relative_path)[1].lower()
+        yield absolute_path, relative_path, EXTENSION_TO_LANGUAGE.get(ext), ext
 
 
 def process_file(absolute_path, relative_path, language):
@@ -88,24 +73,34 @@ def main():
     ap.add_argument("--auto-generated-dir", default=None, help="Raiz de auto-generated do projeto (default: {raiz do repo}/artifacts/{projeto}/auto-generated)")
     ap.add_argument("--out-dir", default=None, help="Pasta de saida (default: {auto-generated-dir}/out-dependencies)")
     ap.add_argument("--exclude", default="", help="Pastas extras a ignorar, separadas por virgula")
-    ap.add_argument("--ignored-folders-file", default=DEFAULT_IGNORED_FOLDERS_FILE, help="Arquivo com a lista de pastas puladas (default: ignored_folders.txt na raiz do projeto)")
+    ap.add_argument("--ignored-folders-file", default=DEFAULT_IGNORED_FOLDERS_FILE, help="Arquivo com pastas puladas comuns a qualquer projeto (default: ignored_folders.txt na raiz do Documentar)")
+    ap.add_argument("--project-ignored-folders-file", default=None, help="Arquivo com pastas puladas especificas deste projeto, somado ao --ignored-folders-file (default: artifacts/{projeto}/ignored_folders.txt, se existir)")
     args = ap.parse_args()
 
     root = os.path.abspath(args.root)
     project_name = args.project_name or os.path.basename(root.rstrip(os.sep).rstrip("/"))
-    auto_generated_dir = args.auto_generated_dir or os.path.join(ARTIFACTS_DIR, project_name, "auto-generated")
+    project_dir = os.path.join(ARTIFACTS_DIR, project_name)
+    auto_generated_dir = args.auto_generated_dir or os.path.join(project_dir, "auto-generated")
     out_dir = args.out_dir or os.path.join(auto_generated_dir, "out-dependencies")
+    project_ignored_folders_file = args.project_ignored_folders_file or os.path.join(project_dir, "ignored_folders.txt")
     extra_dirs = {d.strip() for d in args.exclude.split(",") if d.strip()}
-    excluded = load_ignored_folders(args.ignored_folders_file) | extra_dirs
+    excluded = (
+        load_ignored_folders(args.ignored_folders_file)
+        | load_ignored_folders_optional(project_ignored_folders_file)
+        | extra_dirs
+    )
 
     print(f"Escaneando {root} ...", file=sys.stderr)
     files = list(list_files(root, excluded))
-    print(f"{len(files)} arquivo(s) reconhecido(s). Processando...", file=sys.stderr)
+    print(f"{len(files)} arquivo(s) encontrado(s). Processando...", file=sys.stderr)
 
     results = []
     status_counts = {}
-    for absolute_path, language in files:
-        relative_path = os.path.relpath(absolute_path, root).replace(os.sep, "/")
+    unrecognized_extension_counts = Counter()
+    for absolute_path, relative_path, language, ext in files:
+        if language is None:
+            unrecognized_extension_counts[ext or "(No extension)"] += 1
+            continue
         info = process_file(absolute_path, relative_path, language)
         results.append(info)
         status_counts[info["status"]] = status_counts.get(info["status"], 0) + 1
@@ -129,10 +124,15 @@ def main():
                 "builtin": builtin_imports, "external": external_imports,
             }
 
+    unrecognized_extensions = dict(
+        sorted(unrecognized_extension_counts.items(), key=lambda kv: kv[1], reverse=True)
+    )
+
     metadata = (
         Metadata(root, [r["language"] for r in results])
         .add_custom_field("by_status", status_counts)
         .add_custom_field("resolution", resolution_counts)
+        .add_custom_field("unrecognized_extensions", unrecognized_extensions)
         .to_dict()
     )
 
@@ -144,6 +144,7 @@ def main():
     print(f"\nGerado: {json_path}", file=sys.stderr)
     print(f"Por status: {status_counts}", file=sys.stderr)
     print(f"Resolucao de imports: {resolution_counts}", file=sys.stderr)
+    print(f"Extensoes nao reconhecidas: {unrecognized_extensions}", file=sys.stderr)
 
 
 if __name__ == "__main__":

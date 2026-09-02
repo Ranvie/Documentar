@@ -5,7 +5,7 @@ import re
 from collections import defaultdict
 from typing import Optional
 
-from .base import LanguageResolver
+from .base import LanguageResolver, load_builtin_names
 
 _RE_CLASSMAP_ENTRY = re.compile(
     r"'((?:[^'\\]|\\.)*)'\s*=>\s*\$(vendorDir|baseDir)\s*\.\s*'((?:[^'\\]|\\.)*)'"
@@ -20,36 +20,31 @@ _KINDS_COM_NOME_CURTO = (
     "instanceof", "catch_type",
 )
 
-_BUILTIN_CLASSES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "php_builtin_classes.txt")
+_DEFAULT_BUILTIN_CLASSES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "php_builtin_classes.txt")
 
 
 def _unescape_php_string(s: str) -> str:
     return s.replace("\\\\", "\\").replace("\\'", "'")
 
 
-def _load_builtin_classes(path) -> set:
-    names = set()
-    if not os.path.isfile(path):
-        return names
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            name = line.split("#", 1)[0].strip()
-            if name:
-                names.add(name.lower())
-    return names
+def _find_composer_project_dirs(root: str) -> list:
+    project_dirs = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        if "vendor" in dirnames:
+            dirnames.remove("vendor")
+        if "composer.json" in filenames:
+            project_dirs.append(dirpath)
+    return project_dirs
 
 
-_BUILTIN_CLASSES_LOWER = _load_builtin_classes(_BUILTIN_CLASSES_PATH)
-
-
-def _load_composer_maps(root: str):
-    vendor_dir = os.path.join(root, "vendor")
+def _load_composer_maps_one(project_root: str):
+    vendor_dir = os.path.join(project_root, "vendor")
     composer_dir = os.path.join(vendor_dir, "composer")
     if not os.path.isdir(composer_dir):
-        return None, None
+        return {}, []
 
     def resolve_var(var, suffix):
-        base = vendor_dir if var == "vendorDir" else root
+        base = vendor_dir if var == "vendorDir" else project_root
         return os.path.normpath(base + suffix)
 
     classmap = {}
@@ -69,8 +64,22 @@ def _load_composer_maps(root: str):
             dirs = [resolve_var(var, _unescape_php_string(suffix)) for var, suffix in _RE_PSR4_DIR.findall(dirs_blob)]
             if dirs:
                 psr4.append((_unescape_php_string(prefix), dirs))
-        psr4.sort(key=lambda item: len(item[0]), reverse=True)
 
+    return classmap, psr4
+
+
+def _load_composer_maps(root: str):
+    classmap = {}
+    psr4 = []
+    for project_dir in _find_composer_project_dirs(root):
+        project_classmap, project_psr4 = _load_composer_maps_one(project_dir)
+        classmap.update(project_classmap)
+        psr4.extend(project_psr4)
+
+    if not classmap and not psr4:
+        return None, None
+
+    psr4.sort(key=lambda item: len(item[0]), reverse=True)
     return classmap, psr4
 
 
@@ -89,10 +98,13 @@ def _psr4_lookup(qualified_name: str, psr4) -> Optional[str]:
 class PhpResolver(LanguageResolver):
     language = "php"
 
+    def __init__(self, builtin_classes_file=_DEFAULT_BUILTIN_CLASSES_FILE):
+        self._builtin_names = load_builtin_names(builtin_classes_file)
+
     def resolve(self, files: list, root: str) -> None:
         classmap, psr4 = _load_composer_maps(root)
 
-        own_index: dict[str, str] = {}
+        own_index: dict[str, list] = defaultdict(list)
         by_short_name: dict[str, list] = defaultdict(list)
         for file in files:
             if file["status"] != "ok":
@@ -100,7 +112,7 @@ class PhpResolver(LanguageResolver):
             for symbol in file["symbols"]:
                 if symbol["kind"] not in _SYMBOL_KINDS_INDEXAVEIS:
                     continue
-                own_index[symbol["qualified_name"]] = file["path"]
+                own_index[symbol["qualified_name"]].append(file["path"])
                 short_name = symbol["qualified_name"].rsplit("\\", 1)[-1]
                 by_short_name[short_name].append(file["path"])
 
@@ -118,32 +130,62 @@ class PhpResolver(LanguageResolver):
                 raw = imp["raw"]
                 if imp["kind"] in _KINDS_COM_NOME_CURTO:
                     raw = local_alias.get(raw.lstrip("\\"), raw)
-                imp["resolved_path"], imp["builtin"], imp["external"] = self._finalize(raw, classmap, psr4, own_index, by_short_name, root)
+                imp["resolved_path"], imp["builtin"], imp["external"] = self._finalize(raw, classmap, psr4, own_index, by_short_name, root, file["path"])
 
             for symbol in file["symbols"]:
                 for ref in symbol["extends"] + symbol["implements"]:
                     raw = local_alias.get(ref["raw"].lstrip("\\"), ref["raw"])
-                    ref["resolved_path"], ref["builtin"], ref["external"] = self._finalize(raw, classmap, psr4, own_index, by_short_name, root)
+                    ref["resolved_path"], ref["builtin"], ref["external"] = self._finalize(raw, classmap, psr4, own_index, by_short_name, root, file["path"])
 
-    def _finalize(self, raw, classmap, psr4, own_index, by_short_name, root):
+    def _finalize(self, raw, classmap, psr4, own_index, by_short_name, root, from_path):
         raw = raw.lstrip("\\")
-        if raw.lower() in _BUILTIN_CLASSES_LOWER:
+        if raw.lower() in self._builtin_names:
             return None, True, False
-        resolved_path = self._resolve_one(raw, classmap, psr4, own_index, by_short_name, root)
-        external = bool(resolved_path) and resolved_path.split("/", 1)[0] == "vendor"
+        resolved_path = self._resolve_one(raw, classmap, psr4, own_index, by_short_name, root, from_path)
+        external = bool(resolved_path) and "vendor" in resolved_path.split("/")
         return resolved_path, False, external
 
-    def _resolve_one(self, qualified_name, classmap, psr4, own_index, by_short_name, root) -> Optional[str]:
+    def _resolve_one(self, qualified_name, classmap, psr4, own_index, by_short_name, root, from_path) -> Optional[str]:
         if classmap and qualified_name in classmap:
             return os.path.relpath(classmap[qualified_name], root).replace(os.sep, "/")
         if psr4:
             found = _psr4_lookup(qualified_name, psr4)
             if found:
                 return os.path.relpath(found, root).replace(os.sep, "/")
-        if qualified_name in own_index:
-            return own_index[qualified_name]
         short_name = qualified_name.rsplit("\\", 1)[-1]
+        own_candidates = own_index.get(qualified_name)
+        if own_candidates:
+            return self._pick_closest(own_candidates, from_path, short_name)
         candidates = by_short_name.get(short_name)
-        if candidates and len(candidates) == 1:
+        if candidates:
+            return self._pick_closest(candidates, from_path, short_name)
+        return None
+
+    @staticmethod
+    def _pick_closest(candidates: list, from_path: str, short_name: str) -> Optional[str]:
+        if len(candidates) == 1:
             return candidates[0]
+
+        from_dir_parts = from_path.split("/")[:-1]
+
+        def shared_prefix_len(candidate: str) -> int:
+            candidate_dir_parts = candidate.split("/")[:-1]
+            n = 0
+            for a, b in zip(from_dir_parts, candidate_dir_parts):
+                if a != b:
+                    break
+                n += 1
+            return n
+
+        scored = sorted(((shared_prefix_len(c), c) for c in candidates), key=lambda item: item[0], reverse=True)
+        best_score = scored[0][0]
+        tied = [c for score, c in scored if score == best_score]
+        if len(tied) == 1 and best_score > 0:
+            return tied[0]
+
+        expected_basenames = {f"{short_name}.php", f"{short_name}.class.php", f"{short_name}.trait.php", f"{short_name}.interface.php"}
+        matching = [c for c in tied if c.rsplit("/", 1)[-1] in expected_basenames]
+        if len(matching) == 1:
+            return matching[0]
+
         return None

@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import json
 import os
+from collections import defaultdict
 
-from .base import LanguageResolver
+from .base import LanguageResolver, load_builtin_names
 
 _EXTENSIONS = (".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".vue")
 
 _TSCONFIG_CANDIDATES = ("tsconfig.app.json", "tsconfig.json")
+
+_DEFAULT_BUILTIN_CLASSES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "javascript_builtin_classes.txt")
 
 
 def _load_path_aliases(root):
@@ -31,8 +34,19 @@ def _load_path_aliases(root):
 class JavaScriptResolver(LanguageResolver):
     language = "javascript"
 
+    def __init__(self, builtin_classes_file=_DEFAULT_BUILTIN_CLASSES_FILE):
+        self._builtin_names = load_builtin_names(builtin_classes_file)
+
     def resolve(self, files: list, root: str) -> None:
         aliases = _load_path_aliases(root)
+
+        own_index = defaultdict(list)
+        for file in files:
+            if file["status"] != "ok":
+                continue
+            for symbol in file["symbols"]:
+                if symbol["kind"] == "class":
+                    own_index[symbol["name"]].append(file["path"])
 
         for file in files:
             if file["status"] != "ok":
@@ -53,6 +67,15 @@ class JavaScriptResolver(LanguageResolver):
                         break
                 else:
                     imp["external"] = True
+
+            for symbol in file["symbols"]:
+                for ref in symbol["extends"] + symbol["implements"]:
+                    if ref["raw"].lower() in self._builtin_names:
+                        ref["builtin"] = True
+                        continue
+                    candidates = own_index.get(ref["raw"])
+                    if candidates and len(candidates) == 1:
+                        ref["resolved_path"] = candidates[0]
 
     def _resolve_from(self, root, base_dir, spec):
         base = os.path.normpath(os.path.join(root, base_dir, spec))
