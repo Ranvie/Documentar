@@ -10,7 +10,7 @@ import argparse
 import json
 import os
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 _HERE = os.path.dirname(os.path.abspath(__file__)) # Tools/dependency
 _TOOLS_DIR = os.path.dirname(_HERE)                # Tools
@@ -38,9 +38,7 @@ ARTIFACTS_DIR = os.path.join(PROJECT_ROOT, "artifacts")
 def list_files(root, excluded):
     for absolute_path, relative_path in scan_files(root, excluded):
         ext = os.path.splitext(relative_path)[1].lower()
-        if ext not in EXTENSION_TO_LANGUAGE:
-            continue
-        yield absolute_path, relative_path, EXTENSION_TO_LANGUAGE[ext]
+        yield absolute_path, relative_path, EXTENSION_TO_LANGUAGE.get(ext), ext
 
 
 def process_file(absolute_path, relative_path, language):
@@ -94,11 +92,15 @@ def main():
 
     print(f"Escaneando {root} ...", file=sys.stderr)
     files = list(list_files(root, excluded))
-    print(f"{len(files)} arquivo(s) reconhecido(s). Processando...", file=sys.stderr)
+    print(f"{len(files)} arquivo(s) encontrado(s). Processando...", file=sys.stderr)
 
     results = []
     status_counts = {}
-    for absolute_path, relative_path, language in files:
+    unrecognized_extension_counts = Counter()
+    for absolute_path, relative_path, language, ext in files:
+        if language is None:
+            unrecognized_extension_counts[ext or "(No extension)"] += 1
+            continue
         info = process_file(absolute_path, relative_path, language)
         results.append(info)
         status_counts[info["status"]] = status_counts.get(info["status"], 0) + 1
@@ -122,10 +124,15 @@ def main():
                 "builtin": builtin_imports, "external": external_imports,
             }
 
+    unrecognized_extensions = dict(
+        sorted(unrecognized_extension_counts.items(), key=lambda kv: kv[1], reverse=True)
+    )
+
     metadata = (
         Metadata(root, [r["language"] for r in results])
         .add_custom_field("by_status", status_counts)
         .add_custom_field("resolution", resolution_counts)
+        .add_custom_field("unrecognized_extensions", unrecognized_extensions)
         .to_dict()
     )
 
@@ -137,6 +144,7 @@ def main():
     print(f"\nGerado: {json_path}", file=sys.stderr)
     print(f"Por status: {status_counts}", file=sys.stderr)
     print(f"Resolucao de imports: {resolution_counts}", file=sys.stderr)
+    print(f"Extensoes nao reconhecidas: {unrecognized_extensions}", file=sys.stderr)
 
 
 if __name__ == "__main__":
