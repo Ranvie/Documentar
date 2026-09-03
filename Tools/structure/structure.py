@@ -158,12 +158,13 @@ def main():
 
     files = data["files"]
     root = data["_metadata"]["root"]
+    total_files = data["_metadata"]["files"]["total"]
 
     fan_out, fan_in = compute_fan_metrics(files)
     tree = build_tree(files, fan_out, fan_in)
     compute_stats(tree)
 
-    metadata = Metadata(root, [f["language"] for f in files])
+    metadata = Metadata(root, [f["language"] for f in files], total_files=total_files)
 
     os.makedirs(out_dir, exist_ok=True)
 

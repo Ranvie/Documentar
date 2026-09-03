@@ -10,7 +10,7 @@ from git_state import get_git_info
 
 
 class Metadata:
-    def __init__(self, root: str, file_languages: list):
+    def __init__(self, root: str, file_languages: list, total_files: int | None = None):
         language_counts = Counter(file_languages)
         self._data = {
             "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -18,7 +18,8 @@ class Metadata:
             "git": get_git_info(root),
             "command": os.path.basename(sys.argv[0]) + " " + " ".join(sys.argv[1:]),
             "files": {
-                "total": len(file_languages),
+                "total": total_files if total_files is not None else len(file_languages),
+                "recognized": len(file_languages),
                 "type": dict(sorted(language_counts.items())),
             },
         }

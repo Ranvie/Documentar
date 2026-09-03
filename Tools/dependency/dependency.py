@@ -129,7 +129,7 @@ def main():
     )
 
     metadata = (
-        Metadata(root, [r["language"] for r in results])
+        Metadata(root, [r["language"] for r in results], total_files=len(files))
         .add_custom_field("by_status", status_counts)
         .add_custom_field("resolution", resolution_counts)
         .add_custom_field("unrecognized_extensions", unrecognized_extensions)
